@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-gpu-exporter
+  labels:
+    app: nvidia-gpu-exporter
+spec:
+  selector:
+    matchLabels:
+      app: nvidia-gpu-exporter
+  template:
+    metadata:
+      labels:
+        app: nvidia-gpu-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8082"
+        prometheus.io/path: "/metrics"
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cloud.google.com/gke-accelerator
+                    operator: Exists
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Equal
+          value: present
+          effect: NoSchedule
+      containers:
+        - name: nvidia-gpu-exporter
+          image: ghcr.io/shadi/prometheus-nvidia-exporter:latest
+          securityContext:
+            privileged: true
+          env:
+            - name: LD_LIBRARY_PATH
+              value: /home/kubernetes/bin/nvidia/lib64
+          ports:
+            - name: metrics
+              containerPort: 8082
+              protocol: TCP
+          volumeMounts:
+            - name: nvidia-lib
+              mountPath: /home/kubernetes/bin/nvidia/lib64
+              readOnly: true
+            - name: dev
+              mountPath: /dev
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 3
+            periodSeconds: 10
+      volumes:
+        - name: nvidia-lib
+          hostPath:
+            path: /home/kubernetes/bin/nvidia/lib64
+            type: Directory
+        - name: dev
+          hostPath:
+            path: /dev
+            type: Directory
