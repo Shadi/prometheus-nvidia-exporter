@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var nvmlLibraryPaths = []string{
+var defaultNvmlLibraryPaths = []string{
 	"libnvidia-ml.so.1",
 	"/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1",
 	"/usr/lib/aarch64-linux-gnu/libnvidia-ml.so.1",
@@ -24,6 +25,15 @@ var nvmlLibraryPaths = []string{
 	"/usr/lib/libnvidia-ml.so.1",
 	// GKE / COS nodes
 	"/home/kubernetes/bin/nvidia/lib64/libnvidia-ml.so.1",
+}
+
+func nvmlLibraryPaths() []string {
+	extra := os.Getenv("NVML_LIBRARY_PATH")
+	if extra == "" {
+		return defaultNvmlLibraryPaths
+	}
+	paths := strings.Split(extra, ":")
+	return append(paths, defaultNvmlLibraryPaths...)
 }
 
 type Options struct {
@@ -98,7 +108,7 @@ func main() {
 }
 
 func initNVML(logger zerolog.Logger) nvml.Return {
-	for _, path := range nvmlLibraryPaths {
+	for _, path := range nvmlLibraryPaths() {
 		if err := nvml.SetLibraryOptions(nvml.WithLibraryPath(path)); err != nil {
 			logger.Debug().Str("path", path).Err(err).Msg("failed to set library path")
 			continue
